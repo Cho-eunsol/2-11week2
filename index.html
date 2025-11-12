@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>능력 찾기 게임</title>
+<style>
+:root {
+  --accent: #5b6b7d;
+  --accent2: #7a8b9c;
+  --bg: #000000;
+  --text: #a7b3c2;
+}
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg) url('background.jpg') no-repeat center center fixed;
+  background-size: cover;
+  color: var(--text);
+  font-family: Pretendard, sans-serif;
+  overflow: hidden;
+}
+
+.game-intro {
+  top: 50px;
+  text-align: center;
+  font-size: 1rem;
+  color: #88b0ff;
+  opacity: 0.9;
+  margin-top: 20px;
+  margin-bottom: -5px;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 6px rgba(0,150,255,0.3);
+  z-index: 50;
+  position: relative;
+}
+
+h1 {
+  text-align: center;
+  top: 60px;
+  margin: 10px 0 5px;
+  color: var(--accent2);
+  font-size: 1.2rem;
+  font-weight: 600;
+  position: relative;
+  z-index: 30;
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0,180,255,0.6);
+}
+
+#game-area { position: relative; width: 100vw; height: calc(100vh - 60px); overflow: hidden; }
+
+.word {
+  position: absolute;
+  font-size: 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.25s ease, color 0.25s ease, left 0.35s ease, top 0.35s ease, opacity 0.3s;
+  opacity: 0.85;
+  z-index: 10;
+  white-space: nowrap;
+  color: var(--text);
+  text-shadow: 0 0 2px rgba(0,128,255,0.2);
+}
+
+.word:hover {
+  color: var(--accent);
+  text-shadow: 0 0 2px rgba(0,200,255,0.8);
+}
+
+.target-word {
+  font-weight: 500;
+  font-size: 1.1rem;
+  color: var(--accent2);
+  text-shadow: 0 0 2px rgba(0,200,255,0.9);
+}
+
+@keyframes correctPulse {
+  0%, 100% { transform: scale(1); color: #7ab8ff; text-shadow: 0 0 10px #7ab8ff; }
+  50% { transform: scale(1); color: #ffffff; text-shadow: 0 0 25px #7ab8ff; }
+}
+
+.correct { animation: correctPulse 0.7s ease forwards; }
+
+canvas#particleCanvas, canvas#burstCanvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+canvas#particleCanvas { z-index: 10; }
+canvas#burstCanvas { z-index: 40; }
+</style>
+</head>
+<body>
+<canvas id="particleCanvas"></canvas>
+<canvas id="burstCanvas"></canvas>
+
+<div class="game-intro">✦ 숨겨진 능력 ✦</div>
+<h1 id="target-word">?</h1>
+<div id="game-area"></div>
+
+<script>
+const abilities = ["용기","지혜","열정","창의력","인내","도전"];
+const distractors = [
+  "욕심","결단","감정","성실","희망","명예","신념","배려","호기심","헌신",
+  "유혹","책임","관용","절제","관찰","근성","정의","의심","열망","신중",
+  "겸손","사랑","두려움","관심","자존심","도전정신","희생","긍정","의지",
+  "냉정","통찰","연민","상상","창조","몰입","끈기","열정","집중력",
+  "포용","도덕","정직","사고력","소통","공감","추진력","지혜","창의력",
+  "용기","인내","균형","유연함","책임감","헌신","배려심","도전","결단력"
+];
+const colors = ["#2f3e52","#3f5065","#4e627a","#5d7390"];
+
+const targetEl = document.getElementById('target-word');
+const area = document.getElementById('game-area');
+const burstCanvas = document.getElementById('burstCanvas');
+const burstCtx = burstCanvas.getContext('2d');
+let correctWord = "";
+
+function resizeBurstCanvas() {
+  burstCanvas.width = window.innerWidth;
+  burstCanvas.height = window.innerHeight;
+}
+resizeBurstCanvas();
+window.addEventListener('resize', resizeBurstCanvas);
+
+function burstEffect(x,y){
+  const particles = [];
+  for(let i=0;i<40;i++){
+    particles.push({
+      x,y,
+      vx:(Math.random()-0.5)*6,
+      vy:(Math.random()-0.5)*6,
+      life:30+Math.random()*20,
+      size:2+Math.random()*2,
+      color: colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+  const animate = ()=>{
+    burstCtx.clearRect(0,0,burstCanvas.width,burstCanvas.height);
+    particles.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.vx*=0.95; p.vy*=0.95; p.life--;
+      const alpha=p.life/50;
+      burstCtx.beginPath();
+      burstCtx.fillStyle=p.color.replace(")",`,`+alpha+')').replace("rgb","rgba");
+      burstCtx.arc(p.x,p.y,p.size,0,Math.PI*2); burstCtx.fill();
+    });
+    if(particles.some(p=>p.life>0)) requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function newRound(){
+  area.innerHTML="";
+  correctWord=abilities[Math.floor(Math.random()*abilities.length)];
+  targetEl.textContent=`${correctWord}`;
+
+  const allWords=[];
+  for(let i=0;i<600;i++) allWords.push(distractors[Math.floor(Math.random()*distractors.length)]);
+  allWords.push(correctWord);
+
+  const words=[]; 
+  const centerX=window.innerWidth/2;
+  const centerY=(window.innerHeight-50)/2;
+  const radiusX=Math.min(window.innerWidth,window.innerHeight)*0.35; // 가로 길게
+  const radiusY=Math.min(window.innerWidth,window.innerHeight)*0.30; // 세로 짧게
+
+  allWords.forEach(wordText=>{
+    const w=document.createElement('div');
+    w.className='word';
+    w.textContent=wordText;
+    w.style.color=colors[Math.floor(Math.random()*colors.length)];
+    if(wordText===correctWord) w.classList.add('target-word');
+    area.appendChild(w);
+
+    // 타원형 3D 좌표
+    const phi=Math.random()*Math.PI;
+    const theta=Math.random()*2*Math.PI;
+    const x=radiusX*Math.sin(phi)*Math.cos(theta);
+    const y=radiusY*Math.sin(phi)*Math.sin(theta);
+    const z=radiusY*Math.cos(phi);
+
+    words.push({el:w,x,y,z});
+
+    // 마우스 이벤트
+    w.addEventListener('mouseenter',()=>{
+      if(wordText===correctWord) return;
+      const dx=(Math.random()-0.5)*100;
+      const dy=(Math.random()-0.5)*100;
+      w.style.left=`${w.offsetLeft+dx}px`;
+      w.style.top=`${w.offsetTop+dy}px`;
+      w.style.transform='scale(1.15)';
+    });
+    w.addEventListener('mouseleave',()=>{w.style.transform='scale(1)';});
+    w.addEventListener('click',(e)=>{
+      if(wordText===correctWord){
+        w.classList.add('correct');
+        burstEffect(e.clientX,e.clientY);
+        setTimeout(newRound,1000);
+      } else {
+        w.style.opacity=0.3;
+        w.style.transform="scale(0.9)";
+      }
+    });
+  });
+
+  // 회전 애니메이션
+  let angleX=0, angleY=0;
+  function rotateWords(){
+    angleY+=0.002;
+    angleX+=0.001;
+    words.forEach(w=>{
+      let x=w.x*Math.cos(angleY)-w.z*Math.sin(angleY);
+      let z=w.x*Math.sin(angleY)+w.z*Math.cos(angleY);
+      let y=w.y*Math.cos(angleX)-z*Math.sin(angleX);
+      z=w.y*Math.sin(angleX)+z*Math.cos(angleX);
+      const scale=(z+radiusY)/(2*radiusY)+0.5;
+      w.el.style.left=`${centerX+x*scale}px`;
+      w.el.style.top=`${centerY+y*scale}px`;
+      w.el.style.transform=`translate(-50%,-50%) scale(${scale})`;
+      w.el.style.opacity=0.5+0.5*scale;
+    });
+    requestAnimationFrame(rotateWords);
+  }
+  rotateWords();
+}
+
+newRound();
+
+// 마우스 파티클
+const canvas=document.getElementById('particleCanvas');
+const ctx=canvas.getContext('2d');
+let particles=[];
+function resizeCanvas(){canvas.width=window.innerWidth; canvas.height=window.innerHeight;}
+resizeCanvas();
+document.addEventListener('mousemove', e=>{
+  for(let i=0;i<2;i++){
+    particles.push({x:e.clientX,y:e.clientY,vx:(Math.random()-0.5)*1.2,vy:(Math.random()-0.5)*1.2,life:25+Math.random()*10,size:1+Math.random()*1.8});
+  }
+});
+function drawParticles(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.life-=1;
+    const alpha=Math.max(0,p.life/25);
+    ctx.beginPath();
+    ctx.fillStyle=`rgba(0,153,255,${alpha})`;
+    ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+    if(p.life<=0) particles.splice(i,1);
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+</script>
+</body>
+</html>
